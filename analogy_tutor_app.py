@@ -246,7 +246,7 @@ def main():
     init_session_state()
     render_sidebar()
 
-    st.title("🎓 Analogy Tutor — Multi-Model Edition")
+    st.title("🎓 Analogy Tutor")
     st.markdown("Learn ANY topic through analogies based on your interests!")
 
     st.subheader("🤔 What do you want to learn today?")
