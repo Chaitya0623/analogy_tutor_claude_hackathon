@@ -53,6 +53,84 @@ AVAILABLE_MODELS = [
 
 
 # ============================================================================
+# SAVE KEY TO .ENV
+# ============================================================================
+
+def save_key_to_env(key: str, value: str):
+    """Append or update a key in the .env file and runtime environment."""
+
+    env_path = ".env"
+
+    # Load existing lines
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+    else:
+        lines = []
+
+    # Replace or insert key
+    updated = False
+    for i, line in enumerate(lines):
+        if line.startswith(key + "="):
+            lines[i] = f"{key}={value}\n"
+            updated = True
+            break
+
+    if not updated:
+        lines.append(f"{key}={value}\n")
+
+    # Write back
+    with open(env_path, "w") as f:
+        f.writelines(lines)
+
+    # Update runtime environment
+    os.environ[key] = value
+
+
+# ============================================================================
+# API SETUP (WITH UI ENTRY FOR MISSING KEYS)
+# ============================================================================
+
+def setup_apis():
+    keys = {
+        "gemini": os.getenv("GEMINI_API_KEY"),
+        "openai": os.getenv("OPENAI_API_KEY"),
+        "claude": os.getenv("ANTHROPIC_API_KEY")
+    }
+
+    missing = {name: key for name, key in keys.items() if not key}
+
+    # UI for missing keys
+    if missing:
+        st.sidebar.warning("⚠️ Missing API keys detected!")
+
+        st.sidebar.subheader("🔑 Add Missing API Keys")
+
+        for name in missing:
+            new_key = st.sidebar.text_input(
+                f"Enter {name.upper()}_API_KEY:",
+                type="password",
+                key=f"input_{name}"
+            )
+
+            if new_key:
+                save_key_to_env(f"{name.upper()}_API_KEY", new_key)
+                keys[name] = new_key
+                st.sidebar.success(f"{name.upper()}_API_KEY saved!")
+
+        st.sidebar.caption("Keys are saved into the .env file.")
+
+    # Configure Gemini if available
+    if keys["gemini"]:
+        genai.configure(api_key=keys["gemini"])
+
+    return keys
+
+
+API_KEYS = setup_apis()
+
+
+# ============================================================================
 # SMART INTEREST SELECTION
 # ============================================================================
 
@@ -83,30 +161,6 @@ def pick_best_interest(topic: str, interests: list):
         "Scoring summary:\n" + "\n".join(explanations)
     )
     return best_interest, reason
-
-
-# ============================================================================
-# API SETUP
-# ============================================================================
-
-def setup_apis():
-    keys = {
-        "gemini": os.getenv("GEMINI_API_KEY"),
-        "openai": os.getenv("OPENAI_API_KEY"),
-        "claude": os.getenv("ANTHROPIC_API_KEY")
-    }
-
-    # for name, key in keys.items():
-    #     if not key:
-    #         st.error(f"❌ Missing {name.upper()}_API_KEY in .env")
-
-    if keys["gemini"]:
-        genai.configure(api_key=keys["gemini"])
-
-    return keys
-
-
-API_KEYS = setup_apis()
 
 
 # ============================================================================
