@@ -4,7 +4,7 @@ Analogy Tutor - Learn Any Topic Through Your Interests (Multi-Model)
 Streamlit app that teaches technical concepts using analogies grounded in your
 personal interests. Supports:
 - Gemini 2.0 Flash
-- OpenAI GPT-5.1-chat
+- OpenAI gpt-4o-mini
 - Claude 2.1
 
 API keys should be set in a .env file:
@@ -47,7 +47,7 @@ DEFAULT_INTERESTS = [
 
 AVAILABLE_MODELS = [
     "gemini-2.0-flash",
-    "gpt-5.1-chat",
+    # "gpt-4o-mini",
     "claude-2.1"
 ]
 
@@ -88,46 +88,50 @@ def save_key_to_env(key: str, value: str):
 
 
 # ============================================================================
-# API SETUP (WITH UI ENTRY FOR MISSING KEYS)
+# API SETUP (ONLY SHOW KEY FIELD FOR SELECTED MODEL)
 # ============================================================================
 
 def setup_apis():
+    # Load known keys
     keys = {
         "gemini": os.getenv("GEMINI_API_KEY"),
         "openai": os.getenv("OPENAI_API_KEY"),
         "claude": os.getenv("ANTHROPIC_API_KEY")
     }
 
-    missing = {name: key for name, key in keys.items() if not key}
+    # Mapping model → (internal name, environment variable name)
+    model_to_key = {
+        "gemini-2.0-flash": ("gemini", "GEMINI_API_KEY"),
+        "gpt-4o-mini": ("openai", "OPENAI_API_KEY"),
+        "claude-2.1": ("claude", "ANTHROPIC_API_KEY"),
+    }
 
-    # UI for missing keys
-    if missing:
-        st.sidebar.warning("⚠️ Missing API keys detected!")
+    chosen_model = st.session_state.get("chosen_model", AVAILABLE_MODELS[0])
+    model_key, env_var = model_to_key[chosen_model]
+    current_key = keys[model_key]
 
-        st.sidebar.subheader("🔑 Add Missing API Keys")
+    # Show input box ONLY for the selected model
+    if not current_key:
+        st.sidebar.warning(f"⚠️ {env_var} is missing for {chosen_model}.")
 
-        for name in missing:
-            new_key = st.sidebar.text_input(
-                f"Enter {name.upper()}_API_KEY:",
-                type="password",
-                key=f"input_{name}"
-            )
+        new_key = st.sidebar.text_input(
+            f"Enter {env_var}:",
+            type="password"
+        )
 
-            if new_key:
-                save_key_to_env(f"{name.upper()}_API_KEY", new_key)
-                keys[name] = new_key
-                st.sidebar.success(f"{name.upper()}_API_KEY saved!")
+        if new_key:
+            save_key_to_env(env_var, new_key)
+            keys[model_key] = new_key
+            st.sidebar.success(f"{env_var} saved!")
 
-        st.sidebar.caption("Keys are saved into the .env file.")
-
-    # Configure Gemini if available
+    # Configure APIs
     if keys["gemini"]:
         genai.configure(api_key=keys["gemini"])
 
+    if keys["openai"]:
+        openai.api_key = keys["openai"]
+
     return keys
-
-
-API_KEYS = setup_apis()
 
 
 # ============================================================================
@@ -185,16 +189,15 @@ Follow the structure EXACTLY.
             response = model.generate_content(prompt)
             return response.text
 
-        elif model_name == "gpt-5.1-chat":
-            openai.api_key = API_KEYS["openai"]
+        elif model_name == "gpt-4o-mini":
             completion = openai.ChatCompletion.create(
-                model="gpt-5.1-chat",
+                model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}]
             )
             return completion.choices[0].message.content
 
         elif model_name == "claude-2.1":
-            client = anthropic.Anthropic(api_key=API_KEYS["claude"])
+            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
             response = client.completions.create(
                 model="claude-2.1",
                 max_tokens_to_sample=800,
@@ -237,6 +240,9 @@ def render_sidebar():
     st.session_state.chosen_model = st.sidebar.selectbox(
         "Model:", AVAILABLE_MODELS, index=AVAILABLE_MODELS.index(st.session_state.chosen_model)
     )
+
+    # Re-check keys when model changes
+    setup_apis()
 
     st.sidebar.subheader("🎯 Your Interests")
     st.sidebar.caption("Analogies will be drawn from these domains.")
@@ -298,6 +304,7 @@ def render_history():
 def main():
     st.set_page_config(page_title="Analogy Tutor", page_icon="🎓", layout="wide")
     init_session_state()
+
     render_sidebar()
 
     st.title("🎓 Analogy Tutor")
